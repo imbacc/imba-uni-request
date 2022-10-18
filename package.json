@@ -1,6 +1,6 @@
 {
   "name": "imba-uni-request",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "uniapp框架封装的请求包 imba-uni-request",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -36,17 +36,19 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/imbacc/npm-ts.git"
+    "url": "git+https://github.com/imbacc/imba-uni-request.git"
   },
   "keywords": [
-    "keywords"
+    "imba-uni-request",
+    "uni-request",
+    "uni请求封装"
   ],
   "author": "imbacc",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/imbacc/npm-ts/issues"
+    "url": "https://github.com/imbacc/imba-uni-request/issues"
   },
-  "homepage": "https://github.com/imbacc/npm-ts#readme",
+  "homepage": "https://github.com/imbacc/imba-uni-request#readme",
   "dependencies": {
     "imba-cache": "^1.1.1",
     "qs-stringify": "^1.2.1"
