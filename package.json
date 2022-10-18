@@ -1,0 +1,54 @@
+{
+  "name": "imba-uni-request",
+  "version": "1.0.2",
+  "description": "uniapp框架封装的请求包 imba-uni-request",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "del /q /s dist && tsc && xcopy /E /C /F /Y \"libs/types/*\" \"dist/types/\"",
+    "test": "cross-env TS_NODE_PROJECT='tests/tsconfig.test.json' mocha -r ts-node/register tests/*.spec.ts",
+    "init": "del /q /s node_modules && rd /q /s node_modules && pnpm install",
+    "docs": "pnpm exec docsify serve docs",
+    "adduser": "npm adduser --access=public --registry=https://registry.npmjs.org/",
+    "pub": "bumpp --commit --tag --push && npm run pub2",
+    "pub2": "npm run build && npm publish --access=public --registry=https://registry.npmjs.org/",
+    "pub2:beta": "npm run build && npm publish --access=public --dist-tag beta-1.0.0 --registry=https://registry.npmjs.org/",
+    "rm:package": "npm unpublish --force"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "^3.0.15",
+    "@types/chai": "^4.3.1",
+    "@types/mocha": "^9.1.1",
+    "@types/node": "^17.0.32",
+    "bumpp": "^7.1.1",
+    "chai": "^4.3.6",
+    "cross-env": "^7.0.3",
+    "docsify": "^4.12.2",
+    "docsify-cli": "^4.4.4",
+    "mocha": "^10.0.0",
+    "prettier": "2.0.0",
+    "ts-node": "^10.7.0",
+    "tsconfig-paths": "^4.0.0",
+    "typescript": "^4.5.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imbacc/npm-ts.git"
+  },
+  "keywords": [
+    "keywords"
+  ],
+  "author": "imbacc",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/imbacc/npm-ts/issues"
+  },
+  "homepage": "https://github.com/imbacc/npm-ts#readme",
+  "dependencies": {
+    "imba-cache": "^1.1.1",
+    "qs-stringify": "^1.2.1"
+  }
+}

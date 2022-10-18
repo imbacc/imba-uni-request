@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "es6",
+    "baseUrl": ".",
+    "strict": true,
+    "jsx": "preserve",
+    "sourceMap": false,
+    "allowJs": true,
+    "checkJs": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "lib": ["es5", "es6", "esnext", "dom"],
+    "alwaysStrict": true,
+    "declaration": true,
+    "removeComments": true,
+    "diagnostics": true,
+    // "incremental": true,
+    // "experimentalDecorators": true,
+    // "emitDecoratorMetadata": true,
+    "noImplicitAny": true,
+    "skipLibCheck": false,
+    "pretty": true,
+    "rootDir": "./libs",
+    "outDir": "./dist",
+    "types": ["@dcloudio/types", "@types/node"],
+    "typeRoots": ["types", "node_modules/@types"]
+  },
+  "include": ["libs/**/*.ts", "libs/**/*.tsx", "libs/**/*.vue"],
+  "exclude": ["node_modules", "tests", "docs", "dist", ".history"]
+}

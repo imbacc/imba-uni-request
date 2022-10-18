@@ -1,0 +1,10 @@
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+.history
+.pnpm-debug.log
+.history
+.vscode
+package-lock.json
