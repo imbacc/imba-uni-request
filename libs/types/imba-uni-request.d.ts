@@ -14,8 +14,8 @@ export type CacheEnv = 'development' | 'production' | 'dev' | 'prod'
 export type CacheUnit = 'mm' | 'ss'
 export type RequestConfig_DTYPE = Options_DTYPE & UniOptions_DTYPE
 
-export type Record_DTYPE = { [key in string]: any }
-export type Header_DTYPE = { [key in string]: string }
+export type Record_DTYPE = { [key: string]: any }
+export type Header_DTYPE = { [key: string]: string }
 
 export type DataMore_DTYPE = {
   /**
@@ -103,7 +103,7 @@ export type Options_DTYPE = {
    */
   retryCount?: number
   /**
-   * 重试内时间定位 单位秒
+   * 重试内时间定位 单位秒 在此时间内做错误重试请求
    * 默认 5
    */
   retryInterval?: number
@@ -118,6 +118,7 @@ export type Options_DTYPE = {
   printConsole?: boolean
 }
 
+type dataTYPE = Record_DTYPE
 export interface UniOptions_DTYPE {
   /**
    * 资源url
@@ -126,11 +127,15 @@ export interface UniOptions_DTYPE {
   /**
    * 请求的参数
    */
-  data?: string | AnyObject | ArrayBuffer
+  data?: string | dataTYPE | ArrayBuffer
+  /**
+   * 不管GET请求还是POST PUT请求，请求地址都追加querystring形式参数
+   */
+  appendQuery?: boolean
   /**
    * 设置请求的 header，header 中不能设置 Referer。
    */
-  header?: any
+  header?: Header_DTYPE | any
   /**
    * 默认为 GET
    * 可以是：OPTIONS，GET，HEAD，POST，PUT，DELETE，TRACE，CONNECT
@@ -174,7 +179,7 @@ interface RequestSuccessCallbackResult {
   /**
    * 开发者服务器返回的数据
    */
-  data: string | AnyObject | ArrayBuffer
+  data: string | { [key: string]: any } | ArrayBuffer
   /**
    * 开发者服务器返回的 HTTP 状态码
    */
@@ -182,7 +187,7 @@ interface RequestSuccessCallbackResult {
   /**
    * 开发者服务器返回的 HTTP Response Header
    */
-  header: any
+  header: Header_DTYPE
   /**
    * 开发者服务器返回的 cookies，格式为字符串数组
    */

@@ -13,7 +13,6 @@
     "lib": ["es5", "es6", "esnext", "dom"],
     "alwaysStrict": true,
     "declaration": true,
-    "removeComments": true,
     "diagnostics": true,
     // "incremental": true,
     // "experimentalDecorators": true,

@@ -18,7 +18,7 @@ import { getCache, delCache, setCache } from 'imba-cache'
 import stringify from 'qs-stringify'
 import md5 from './md5'
 
-const consoleLog = (key: any, val: any, color: string = '#41b883') => {
+const consoleLog = (key: string, val: any, color: string = '#41b883') => {
   console.log(`%c ${key}`, `font-size:14px; background:${color}; color:#ffffff;`, val)
 }
 
@@ -78,14 +78,14 @@ export class UniRequest {
    */
   private retryCount: number = 2
   /**
-   * 重试内时间定位 单位秒
+   * 重试内时间定位 单位秒 在此时间内做错误重试请求
    * 默认 5
    */
   private retryInterval: number = 5
   /**
    * 请求地址追加次数统计 [{ '地址': [重试的次数,初次重试的时间] }]
    */
-  private retryUrlCount: { [key in string]: [number, number] } = {}
+  private retryUrlCount: { [key: string]: [number, number] } = {}
   /**
    * loading请求中
    */
@@ -113,7 +113,7 @@ export class UniRequest {
    * @param config
    * @returns
    */
-  private dataFactory(config: RequestConfig_DTYPE | UniOptions_DTYPE) {
+  private dataFactory(config: RequestConfig_DTYPE) {
     let data = config.data as DataMore_DTYPE
     if (typeof data === 'string') return config
     const { _noToken, _formData, _header } = data
@@ -165,6 +165,11 @@ export class UniRequest {
       delete data['_header']
     }
 
+    if (config.headers) {
+      config.header = Object.assign(config.header || {}, config.headers)
+      delete config.headers
+    }
+
     config.data = Object.assign(config.data as DataMore_DTYPE, data)
     return config
   }
@@ -211,11 +216,12 @@ export class UniRequest {
     }
   }
 
-  request<T = any>(apiUrl: string, data: any, method: METHOD_DTYPE, options?: UniOptions_DTYPE): Promise<Response_DTYPE<T>> {
+  request<T = any>(apiUrl: string, data: any, method: METHOD_DTYPE, options?: UniOptions_DTYPE): Promise<T> {
     const { baseURL, headers, timeOut } = this
     let newConfig: UniOptions_DTYPE = this.dataFactory(
       Object.assign(
         {
+          baseURL: options?.url || baseURL,
           url: baseURL + apiUrl,
           data,
           header: Object.assign({ 'content-type': 'application/json;charset=UTF-8' }, headers),
@@ -226,7 +232,7 @@ export class UniRequest {
       )
     ) as UniOptions_DTYPE
 
-    const isGet = newConfig.method === 'GET'
+    const isGet = newConfig.method === 'GET' && !newConfig.appendQuery
     const dataStrify = data && typeof data === 'object' && Object.keys(data).length > 0 ? `?${stringify(data)}` : ''
     let keyApi = `${newConfig.url}${isGet ? `${dataStrify}` : ''}`
     let cacheName = 'cache_' + `${keyApi}`
@@ -245,39 +251,36 @@ export class UniRequest {
     const appPro = {
       id: 'appPro',
       resolved: async (config: RequestConfig_DTYPE) => {
-        const pro = this.recordUrl[apiUrl]
+        const recordKey = `${apiUrl} ${method}`
+        const pro = this.recordUrl[recordKey]
         if (pro) {
-          consoleLog(`${apiUrl} 重复请求,列入集中请求:`, pro, '#f5bd30')
+          consoleLog(`[ ${recordKey} ]-重复请求,列入集中请求:`, pro, '#f5bd30')
           return await pro
         }
 
         if (this.cacheTime > 0) {
           const cache = getCache(cacheName)
           if (cache) {
-            if (this.printConsole) consoleLog(`${apiUrl} 接口缓存:`, cache)
+            if (this.printConsole) consoleLog(`[ ${recordKey} ]-接口缓存:`, cache)
             return await cache
           }
         }
 
         const p = new Promise((resolve) => {
-          if (config.headers) {
-            config.header = Object.assign(config.header, config.headers)
-            delete config.headers
-          }
           config.success = (res) => {
             if (this.cacheBool && this.cacheTime > 0) {
               setCache(cacheName, res, this.comCache())
             }
-            consoleLog(`${apiUrl} 请求成功:`, res)
+            consoleLog(`[ ${recordKey} ]-请求成功:`, res)
             resolve(res)
           }
           config.complete = () => {
-            this.recordUrl[apiUrl] = null
+            this.recordUrl[recordKey] = null
           }
           if (this.retryBool) {
             config.fail = (err) => {
               const retryDefaultValue = [0, new Date().getTime() + this.retryInterval * 1000]
-              const [countNum, firstTime] = this.retryUrlCount[apiUrl] || retryDefaultValue
+              const [countNum, firstTime] = this.retryUrlCount[recordKey] || retryDefaultValue
               const comTime = firstTime - new Date().getTime()
               if (countNum >= this.retryCount) {
                 resolve(err)
@@ -287,17 +290,16 @@ export class UniRequest {
                 resolve(err)
                 return
               }
-              this.recordUrl[apiUrl] = null
-              this.retryUrlCount[apiUrl] = [countNum + 1, firstTime]
-              consoleLog(`${apiUrl} 请求失败,重试请求${countNum + 1}:`, err, '#eb3941')
+              this.recordUrl[recordKey] = null
+              this.retryUrlCount[recordKey] = [countNum + 1, firstTime]
+              consoleLog(`[ ${recordKey} ]-请求失败,重试请求${countNum + 1}:`, err, '#eb3941')
               appPro.resolved(config).then((res) => resolve(res))
             }
           }
           uni.request(config)
-          // this.recordUrl[apiUrl] = uni.request(config)
         })
 
-        this.recordUrl[apiUrl] = p
+        this.recordUrl[recordKey] = p
         return await p
       },
       rejected: () => Promise.reject(`错误异常...`)
@@ -332,22 +334,22 @@ export class UniRequest {
     }
 
     // 最后暴露给用户的就是响应拦截器处理过后的promise
-    return (promise as unknown) as Promise<Response_DTYPE<T>>
+    return (promise as unknown) as Promise<T>
   }
 
-  get<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<Response_DTYPE<T>> {
+  get<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<T> {
     return this.request(apiUrl, data, 'GET', options)
   }
 
-  post<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<Response_DTYPE<T>> {
+  post<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<T> {
     return this.request(apiUrl, data, 'POST', options)
   }
 
-  put<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<Response_DTYPE<T>> {
+  put<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<T> {
     return this.request(apiUrl, data, 'PUT', options)
   }
 
-  delete<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<Response_DTYPE<T>> {
+  delete<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<T> {
     return this.request(apiUrl, data, 'DELETE', options)
   }
 
