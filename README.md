@@ -29,16 +29,8 @@ const http = new UniRequest({
 	 * 设置请求的 header，header 中不能设置 Referer。
 	 * 平台差异说明：App、H5端会自动带上cookie，且H5端不可手动修改
 	 */
+	header: { 'content-type': 'application/json;charset=UTF-8' },
 	headers: {},
-	/**
-	 * 自定义内容 格式函数
-	 */
-	data: {},
-	/**
-	 * 缓存&SWR环境 'development' | 'production' | 'dev' | 'prod'
-	 * 默认 dev
-	 */
-	cacheEnv: 'dev',
 	/**
 	 * 缓存&SWR 是否开启
 	 * 默认 true
@@ -75,6 +67,10 @@ const http = new UniRequest({
 	pageKey: 'page',
 	sizeKey: 'size',
 	/**
+	* 打印API接口地址是否MD5化
+	*/
+	printMD5: false,
+	/**
 	 * 是否开启打印请求数据
 	 */
 	printConsole: true
@@ -86,58 +82,75 @@ console.log('%c [ http ]-86', 'font-size:14px; background:#41b883; color:#ffffff
 
 ```
 this.interceptors.request.use((config) => {
-    let data = config.data
-    if (typeof data === 'string') return config
-    const { _noToken, _formData, _header } = data
-
+    let inject = config.inject as Inject_DTYPE
     this.loading = true
-    if (data['_method']) {
-      config.method = data['_method']
-      delete data['_method']
+
+    if (config.headers) {
+      config.header = Object.assign(config.header || {}, config.headers)
+      delete config.headers
     }
 
-    if (data['_page']) {
-      const pageSize = this.setPageSize(data['_page'])
-      data = Object.assign(data, pageSize)
-      delete data['_page']
+    if (!inject) {
+      return config
     }
 
-    if (data['_cache'] || data['_cache'] === 0) {
-      this.cacheTime = this.comCache(data['_cache'])
-      delete data['_cache']
-    }
+    const { _noToken, _formData, _header, _method, _page, _cache, _cacheUnit, _id, _param, _body } = inject || {}
 
-    if (data['_cacheUnit']) {
-      this.cacheUnit = data['_cacheUnit']
-      delete data['_cacheUnit']
-    }
-
-    if (config.url.indexOf(':id') !== -1) {
-      if (data['_id'] === undefined) {
+    if ((config.url as string).indexOf(':id') !== -1) {
+      if (_id === undefined) {
         this.loading = false
         return Promise.reject(`${config.url} 没有传参数ID 格式 -> { _id: 10086 }`)
       }
-      config.url = config.url.replace(':id', data['_id'])
-      delete data['_id']
+      config.url = (config.url as string).replace(':id', _id)
+      delete inject['_id']
+    }
+
+    if (_method) {
+      config.method = _method
+      delete inject['_method']
+    }
+
+    if (_page) {
+      const pageSize = this.setPageSize(_page)
+      const key = config.method === 'GET' ? 'param' : 'body'
+      config[key] = Object.assign(config[key] || {}, pageSize)
+      delete inject['_page']
+    }
+
+    if (_cache || _cache === 0) {
+      this.cacheTime = _cache
+      delete inject['_cache']
+    }
+
+    if (_cacheUnit) {
+      this.cacheUnit = _cacheUnit
+      delete inject['_cacheUnit']
     }
 
     if (_noToken) {
-      delete data['_noToken']
-      delete config.header['x-access-token']
-      delete config.header['Authorization']
+      delete inject['_noToken']
+      delete (config.header as Header_DTYPE)['x-access-token']
+      delete (config.header as Header_DTYPE)['Authorization']
     }
 
     if (_formData) {
-      config.header['content-Type'] = 'application/x-www-form-urlencoded'
-      delete data['_formData']
+      ;(config.header as Header_DTYPE)['content-Type'] = 'application/x-www-form-urlencoded'
+      delete inject['_formData']
     }
 
     if (_header) {
       config.header = { ...config.header, ..._header }
-      delete data['_header']
+      delete inject['_header']
     }
 
-    config.data = Object.assign(config.data, data)
+    if (_param) {
+      config.param = Object.assign(config.param || {}, _param)
+    }
+
+    if (_body) {
+      config.body = Object.assign(config.body || {}, _body)
+    }
+
     return config
 })
 
@@ -151,7 +164,7 @@ this.interceptors.response.use((res) => {
 
 # 请求拦截和响应拦截设定
 
-# tips：注意拦截器追加的位置 如下剥洋葱执行走向。
+# tips：注意拦截器追加的位置 如下洋葱执行走向。
 
 ```
 // 拦截流程 请求拦截2 -> 请求拦截1 -> 发送请求 -> 响应拦截1 -> 响应拦截2 -> ...
@@ -166,16 +179,16 @@ const testAsync = (config: any) => {
 
 // function 请求拦截1 - 执行位置4
 http.interceptors.request.use((config) => {
-	config.header = Object.assign(config.header, {
-		www: 'www'
+	config.header = Object.assign(config.header || {}, {
+		xxx: 'xxx'
 	})
 	return config
 })
 
 // async await 请求拦截2 - 执行位置3
 http.interceptors.request.use(async (config) => {
-	const result = await testAsync({ async: 'test async await' })
-	config.header = Object.assign(config.header, result)
+	const result = await testAsync({ yyy: 'test async await' })
+	config.header = Object.assign(config.header || {}, result)
 	return config
 })
 
@@ -183,7 +196,7 @@ http.interceptors.request.use(async (config) => {
 http.interceptors.request.use((config) => {
 	return new Promise((resolve) => {
 		setTimeout(() => {
-			config.header = Object.assign(config.header, { Promise: 'test Promise' })
+			config.header = Object.assign(config.header || {}, { zzz: 'test Promise' })
 			resolve(config)
 		}, 300)
 	})
@@ -191,7 +204,7 @@ http.interceptors.request.use((config) => {
 
 // function 请求拦截4 - 执行位置1
 http.interceptors.request.use((config) => {
-	config.data = { qqq: 'ddd' }
+	config.body = Object.assign(config.body || {}, { qqq: '来自拦截器注入' })
 	return config
 })
 
@@ -206,108 +219,176 @@ http.interceptors.response.use((res) => {
 })
 ```
 
+# GET 请求 api/xxx/:id 形式 => api/xxx/1?id=1
+
+```
+http.request(['/api/test/:id', 'GET'], { \_param: { id: 1 }, \_id: `${1}` })
+```
+
+# POST 请求 api/xxx/:id 形式 => api/xxx/2?id=2 请求体 row json => { body: 'i am body man' }
+
+```
+http.request(['/api/test/:id', 'POST'], { \_param: { id: 2 }, \_body: { title: 'i am body man' }, \_id: `${2}` })
+```
+
+# POST 请求修改为 PUT 请求
+
+```
+http.request(['/api/test/put', 'POST'], { \_body: { id: 3 }, \_method: 'PUT' })
+```
+
+# POST 请求分页
+
+```
+http.request(['/api/test/post', 'POST'], { \_body: { id: 4 }, \_page: [1, 10] })
+```
+
+# GET 请求分页
+
+```
+ http.request(['/api/test/get', 'GET'], { \_param: { id: 5 }, \_page: [1, 10] })
+```
+
+# POST 请求分页
+
+```
+http.request(['/api/test/post', 'POST'], { \_body: { id: 6 }, \_page: [1, 10] })
+```
+
+# GET 请求分页 缓存&SWR
+
+```
+http.request(['/api/test/get', 'GET'], { \_param: { id: 7 }, \_cache: 10, \_cacheUnit: 'ss' })
+```
+
+# 多个重复请求 并列为一个请求返回
+
+```
+http.request(['/api/test/get', 'GET'], { \_param: { id: 8 } })
+http.request(['/api/test/get', 'GET'], { \_param: { id: 8 } })
+http.request(['/api/test/get', 'GET'], { \_param: { id: 8 } })
+http.request(['/api/test/get', 'GET'], { \_param: { id: 8 } })
+```
+
 # 尝试错误请求 自动重试请求
 
 ```
-// 尝试错误请求
-http
-	.request(
-		'/api/test',
-		{
-			_cache: 1
-		},
-		'GET',
-		{
-			url: 'https://error.com'
+http.request('/api/test', {}, { baseURL: '//error.com' })
+```
+
+# 设定 uni.request 原参数
+
+```
+http.request('/api/ddd',{}, {
+		uniOption: {
+			withCredentials: true,
+			sslVerify: true,
+			responseType: 'text'
 		}
-	)
-	.then((res) => {
-		console.log('%c [ res ]-31', 'font-size:14px; background:#41b883; color:#ffffff;', res)
-	}).catch((err) => {
-		console.log('%c [ err ]-129', 'font-size:14px; background:#41b883; color:#ffffff;', err)
-	})
+	}
+)
 ```
-
-# 测试多个重复请求 并列为一个请求并返回
-
-```
-for (let i = 0; i < 3; i++) {
-	http.request('/api/xxx', {}, 'GET').then((res) => {
-		console.log('%c [ res ]-35', 'font-size:14px; background:#41b883; color:#ffffff;', res)
-	})
-}
-```
-
-http .request( '/api/xxx', { \_cache: 1 }, 'GET' ) .then((res) => { console.log('%c [ res ]-35', 'font-size:14px; background:#41b883; color:#ffffff;', res) })
-
-for (let i = 0; i < 3; i++) { http.request('/api/xxx', {}, 'GET').then((res) => { console.log('%c [ res ]-35', 'font-size:14px; background:#41b883; color:#ffffff;', res) }) }
-
-http.request('/api/xxx', {}, 'PUT').then((res) => { console.log('%c [ res ]-35', 'font-size:14px; background:#41b883; color:#ffffff;', res) })
 
 # 单个请求额外配置参数
 
 ```
 http
 	.request(
-		'/api/xxx',
+		'/api/test',
+		// 下面为inject
 		{},
-		'POST'
 		// 这里为options单个请求额外配置参数
-		// {
-		/**
-		 * 资源url
-		 */
-		// url: string
-		/**
-		 * 请求的参数
-		 */
-		// data?: string | { [key: string]: any } | ArrayBuffer
-		/**
-		 * 不管GET请求还是POST PUT请求，请求地址都追加querystring形式参数
-		 */
-		// appendQuery?: boolean
-		/**
-		 * 设置请求的 header，header 中不能设置 Referer。
-		 */
-		// header?: any
-		/**
-		 * 默认为 GET
-		 * 可以是：OPTIONS，GET，HEAD，POST，PUT，DELETE，TRACE，CONNECT
-		 */
-		// method?: METHOD_DTYPE
-		/**
-		 * 超时时间
-		 */
-		// timeout?: number
-		/**
-		 * 如果设为json，会尝试对返回的数据做一次 JSON.parse
-		 */
-		// dataType?: string
-		/**
-		 * 验证 ssl 证书
-		 */
-		// sslVerify?: boolean
-		/**
-		 * 跨域请求时是否携带凭证
-		 */
-		// withCredentials?: boolean
-		/**
-		 * DNS解析时优先使用 ipv4
-		 */
-		// firstIpv4?: boolean
-		/**
-		 * 成功返回的回调函数
-		 */
-		// success?: (result: RequestSuccessCallbackResult) => void
-		/**
-		 * 失败的回调函数
-		 */
-		// fail?: (result: GeneralCallbackResult) => void
-		/**
-		 * 结束的回调函数（调用成功、失败都会执行）
-		 */
-		// complete?: (result: GeneralCallbackResult) => void
-		//   }
+		{
+			/**
+			//  *  `baseURL` 将自动加在 `url` 前面，除非 `url` 是一个绝对 URL。
+			//  *  它可以通过设置一个 `baseURL` 便于为实例的方法传递相对 URL
+			//  */
+			// baseURL: string
+			// /**
+			//  * 资源url
+			//  */
+			// url?: string
+			// /**
+			//  * 默认为 GET
+			//  * 可以是：OPTIONS，GET，HEAD，POST，PUT，DELETE，TRACE，CONNECT
+			//  */
+			// method?: METHOD_DTYPE
+			// /**
+			//  * 超时时间，单位毫秒
+			//  * 默认 30s = 1000 * 30
+			//  */
+			// timeOut?: number
+			// /**
+			//  * 设置请求的 header，header 中不能设置 Referer。
+			//  * 平台差异说明：App、H5端会自动带上cookie，且H5端不可手动修改
+			//  */
+			// header?: Header_DTYPE
+			// headers?: Header_DTYPE
+			// /**
+			//  * querystring参数
+			//  */
+			// param?: Data_DTYPE
+			// /**
+			//  * 请求体参数
+			//  */
+			// body?: Data_DTYPE
+			// /**
+			//  * 自定义内容 格式函数
+			//  */
+			// inject?: Inject_DTYPE
+			// /**
+			//  * 缓存&SWR环境 'development' | 'production' | 'dev' | 'prod'
+			//  * 默认 dev
+			//  */
+			// cacheEnv?: CacheEnv
+			// /**
+			//  * 缓存&SWR 是否开启
+			//  * 默认 true
+			//  */
+			// cacheBool?: boolean
+			// /**
+			//  * 缓存&SWR 缓存时间 默认分单位 mm
+			//  * 默认 -1
+			//  */
+			// cacheTime?: number
+			// /**
+			//  * 缓存&SWR 缓存单位 mm | ss
+			//  * 默认 mm
+			//  */
+			// cacheUnit?: CacheUnit
+			// /**
+			//  * 是否请求错误后重试
+			//  * 默认 true
+			//  */
+			// retryBool?: boolean
+			// /**
+			//  * 请求重试错误次数
+			//  * 默认 2
+			//  */
+			// retryCount?: number
+			// /**
+			//  * 重试内时间定位 单位秒 在此时间内做错误重试请求
+			//  * 默认 5
+			//  */
+			// retryInterval?: number
+			// /**
+			//  * uni.request原始配置
+			//  */
+			// uniOption?: UniNamespace.RequestOptions
+			// /**
+			//  * 分页字段设置
+			//  */
+			// pageKey?: string
+			// sizeKey?: string
+			// /**
+			//  * 打印API接口地址是否MD5化
+			//  */
+			// printMD5?: boolean
+			// /**
+			//  * 是否开启打印请求数据
+			//  */
+			// printConsole?: boolean
+		}
 	)
 	.then((res) => {
 		console.log('%c [ res ]-35', 'font-size:14px; background:#41b883; color:#ffffff;', res)

@@ -1,20 +1,18 @@
 import type {
-  UniOptions_DTYPE,
   RequestConfig_DTYPE,
-  Response_DTYPE,
   // head / option
   METHOD_DTYPE,
   CacheEnv,
   CacheUnit,
   Header_DTYPE,
   Record_DTYPE,
-  Options_DTYPE,
-  DataMore_DTYPE
+  Inject_DTYPE,
+  Data_DTYPE
 } from './types/imba-uni-request'
 import type { InterceptorsImpl_DTYPE, InterceptorPro_DTYPE, ChaiList_DTYPE } from './types/imba-uni-interceptor'
 
 import { Interceptors } from './imba-uni-interceptor'
-import { getCache, delCache, setCache } from 'imba-cache'
+import { getCache, delCache, setCache, comCache } from 'imba-cache'
 import stringify from 'qs-stringify'
 import md5 from './md5'
 
@@ -37,6 +35,7 @@ export class UniRequest {
    * 设置请求的 header，header 中不能设置 Referer。
    * 平台差异说明：App、H5端会自动带上cookie，且H5端不可手动修改
    */
+  private header: Header_DTYPE = { 'content-type': 'application/json;charset=UTF-8' }
   private headers: Header_DTYPE = {}
   /**
    * 记录请求过的地址
@@ -99,11 +98,15 @@ export class UniRequest {
    */
   private sizeKey: string = 'size'
   /**
+   * 打印API接口地址是否MD5化
+   */
+  private printMD5: boolean = false
+  /**
    * 是否开启打印请求数据
    */
   private printConsole: boolean = true
 
-  constructor(option: Options_DTYPE) {
+  constructor(option: RequestConfig_DTYPE) {
     this.setObjectVal(option)
     this.defaultInterceptor()
   }
@@ -114,63 +117,77 @@ export class UniRequest {
    * @returns
    */
   private dataFactory(config: RequestConfig_DTYPE) {
-    let data = config.data as DataMore_DTYPE
-    if (typeof data === 'string') return config
-    const { _noToken, _formData, _header } = data
-
+    let inject = config.inject as Inject_DTYPE
     this.loading = true
-    if (data['_method']) {
-      config.method = data['_method']
-      delete data['_method']
-    }
-
-    if (data['_page']) {
-      const pageSize = this.setPageSize(data['_page'])
-      data = Object.assign(data, pageSize)
-      delete data['_page']
-    }
-
-    if (data['_cache'] || data['_cache'] === 0) {
-      this.cacheTime = this.comCache(data['_cache'])
-      delete data['_cache']
-    }
-
-    if (data['_cacheUnit']) {
-      this.cacheUnit = data['_cacheUnit']
-      delete data['_cacheUnit']
-    }
-
-    if (config.url.indexOf(':id') !== -1) {
-      if (data['_id'] === undefined) {
-        this.loading = false
-        return Promise.reject(`${config.url} 没有传参数ID 格式 -> { _id: 10086 }`)
-      }
-      config.url = config.url.replace(':id', data['_id'])
-      delete data['_id']
-    }
-
-    if (_noToken) {
-      delete data['_noToken']
-      delete config.header['x-access-token']
-      delete config.header['Authorization']
-    }
-
-    if (_formData) {
-      config.header['content-Type'] = 'application/x-www-form-urlencoded'
-      delete data['_formData']
-    }
-
-    if (_header) {
-      config.header = { ...config.header, ..._header }
-      delete data['_header']
-    }
 
     if (config.headers) {
       config.header = Object.assign(config.header || {}, config.headers)
       delete config.headers
     }
 
-    config.data = Object.assign(config.data as DataMore_DTYPE, data)
+    if (!inject) {
+      return config
+    }
+
+    const { _noToken, _formData, _header, _method, _page, _cache, _cacheUnit, _id, _param, _body } = inject || {}
+
+    if ((config.url as string).indexOf(':id') !== -1) {
+      if (_id === undefined) {
+        this.loading = false
+        return Promise.reject(`${config.url} 没有传参数ID 格式 -> { _id: 10086 }`)
+      }
+      config.url = (config.url as string).replace(':id', _id)
+      delete inject['_id']
+    }
+
+    if (_method) {
+      config.method = _method
+      delete inject['_method']
+    }
+
+    if (_page) {
+      const pageSize = this.setPageSize(_page)
+      const key = config.method === 'GET' ? 'param' : 'body'
+      config[key] = Object.assign(config[key] || {}, pageSize)
+      delete inject['_page']
+    }
+
+    if (_cache || _cache === 0) {
+      this.cacheTime = _cache
+      delete inject['_cache']
+    }
+
+    if (_cacheUnit) {
+      this.cacheUnit = _cacheUnit
+      delete inject['_cacheUnit']
+    }
+
+    if (_noToken) {
+      delete inject['_noToken']
+      delete (config.header as Header_DTYPE)['x-access-token']
+      delete (config.header as Header_DTYPE)['Authorization']
+    }
+
+    if (_formData) {
+      ;(config.header as Header_DTYPE)['content-Type'] = 'application/x-www-form-urlencoded'
+      delete inject['_formData']
+    }
+
+    if (_header) {
+      config.header = { ...config.header, ..._header }
+      delete inject['_header']
+    }
+
+    if (_param) {
+      config.param = Object.assign(config.param || {}, _param)
+      delete inject['_param']
+    }
+
+    if (_body) {
+      config.body = Object.assign(config.body || {}, _body)
+      delete inject['_body']
+    }
+
     return config
   }
 
@@ -182,7 +199,7 @@ export class UniRequest {
      * 默认拦截请求处理
      */
     this.interceptors.request.use((config) => {
-      return this.dataFactory(config) as RequestConfig_DTYPE
+      return this.dataFactory(config)
     })
 
     /**
@@ -195,12 +212,13 @@ export class UniRequest {
   }
 
   /**
-   *
-   * @returns 计算缓存时间
+   * 计算剩余缓存时间
+   * @param key
+   * @returns
    */
-  private comCache(time?: number) {
-    if (time) this.cacheTime = time
-    return this.cacheUnit === 'mm' ? this.cacheTime * 60 : this.cacheTime
+  private comCacheStrify(key: string) {
+    const lastTime = comCache(key)
+    return `剩余${lastTime}s过期!`
   }
 
   /**
@@ -216,62 +234,89 @@ export class UniRequest {
     }
   }
 
-  request<T = any>(apiUrl: string, data: any, method: METHOD_DTYPE, options?: UniOptions_DTYPE): Promise<T> {
-    const { baseURL, headers, timeOut } = this
-    let newConfig: UniOptions_DTYPE = this.dataFactory(
+  request<T = any>(
+    apiUrl: string | [string, METHOD_DTYPE] | [string, METHOD_DTYPE, number],
+    inject?: Inject_DTYPE,
+    options?: Partial<RequestConfig_DTYPE>
+  ): Promise<T> {
+    if (options) this.setObjectVal(options)
+
+    let api: string = '',
+      method: METHOD_DTYPE = 'GET'
+    if (apiUrl.constructor === Array && apiUrl.length > 0) {
+      const [name, type, time] = apiUrl
+      if (name) api = name
+      if (type) method = type
+      this.cacheTime = time || -1
+    }
+
+    const { baseURL, header, headers, timeOut } = this
+    const newConfig = this.dataFactory(
       Object.assign(
         {
-          baseURL: options?.url || baseURL,
-          url: baseURL + apiUrl,
-          data,
-          header: Object.assign({ 'content-type': 'application/json;charset=UTF-8' }, headers),
+          baseURL: baseURL,
+          url: baseURL + (api || apiUrl),
           method,
+          header: Object.assign(header, headers),
           timeout: timeOut
         },
-        options || {}
+        options || {},
+        options?.uniOption || {}
       )
-    ) as UniOptions_DTYPE
+    ) as RequestConfig_DTYPE
 
-    const isGet = newConfig.method === 'GET' && !newConfig.appendQuery
-    const dataStrify = data && typeof data === 'object' && Object.keys(data).length > 0 ? `?${stringify(data)}` : ''
-    let keyApi = `${newConfig.url}${isGet ? `${dataStrify}` : ''}`
-    let cacheName = 'cache_' + `${keyApi}`
+    if (newConfig.constructor.name === 'Promise') {
+      return (newConfig as unknown) as Promise<any>
+    }
 
-    if (this.cacheBool) {
-      if (this.cacheEnv === 'prod' || this.cacheEnv === 'production') {
-        cacheName += `bodymd5=${md5(dataStrify)}`
-        cacheName = md5(cacheName)
-      } else {
-        cacheName += dataStrify
-      }
-      // if (isGet && keyApi.length === keyApi.lastIndexOf('?') + 1) keyApi = keyApi.substring(0, keyApi.length - 1)
-      if (this.cacheTime === 0) delCache(cacheName)
+    if (inject) {
+      newConfig.inject = Object.assign(newConfig.inject || {}, inject)
     }
 
     const appPro = {
       id: 'appPro',
-      resolved: async (config: RequestConfig_DTYPE) => {
-        const recordKey = `${apiUrl} ${method}`
+      resolved: async (config: UniNamespace.RequestOptions & RequestConfig_DTYPE) => {
+        const paramStrify = config.param && Object.keys(config.param).length > 0 ? `?${stringify(config.param)}` : ''
+        const bodyStrify =
+          config.body && Object.keys(config.body).length > 0
+            ? `${paramStrify ? '&body=right&' : ''}${stringify(config.body)}`
+            : ''
+        const keyApi = `${config.url}${paramStrify}`
+        const isGet = config.method === 'GET'
+        // const isPord = this.cacheEnv === 'prod' || this.cacheEnv === 'production'
+
+        let md5ParamBodyStrify = `${config.url}${paramStrify === '' ? '?' : paramStrify}${!isGet ? bodyStrify : ''}`
+        if (this.printMD5) md5ParamBodyStrify = md5(md5ParamBodyStrify)
+        if (!isGet) config.data = Object.assign(config.data || {}, config.body || {})
+
+        config.url = keyApi
+        const recordKey = `${md5ParamBodyStrify}_${config.method}`
+        const needCache = this.cacheBool && this.cacheTime > 0
+        const cacheName = `cache_${recordKey}`
+        if (this.cacheBool && this.cacheTime === 0) {
+          delCache(cacheName)
+        }
+
         const pro = this.recordUrl[recordKey]
         if (pro) {
-          consoleLog(`[ ${recordKey} ]-重复请求,列入集中请求:`, pro, '#f5bd30')
+          consoleLog(`[ ${recordKey} ]-重复请求,列入集中请求↓`, pro, '#f5bd30')
           return await pro
         }
 
-        if (this.cacheTime > 0) {
+        if (needCache) {
           const cache = getCache(cacheName)
           if (cache) {
-            if (this.printConsole) consoleLog(`[ ${recordKey} ]-接口缓存:`, cache)
+            if (this.printConsole) consoleLog(`[ ${recordKey} ]-接口缓存↓ ${this.comCacheStrify(cacheName)}`, cache)
             return await cache
           }
         }
 
         const p = new Promise((resolve) => {
           config.success = (res) => {
-            if (this.cacheBool && this.cacheTime > 0) {
-              setCache(cacheName, res, this.comCache())
+            if (needCache) {
+              setCache(cacheName, res, this.cacheTime, this.cacheUnit)
             }
-            consoleLog(`[ ${recordKey} ]-请求成功:`, res)
+            consoleLog(`[ ${recordKey} ]-请求成功↓`, res)
             resolve(res)
           }
           config.complete = () => {
@@ -292,7 +337,7 @@ export class UniRequest {
               }
               this.recordUrl[recordKey] = null
               this.retryUrlCount[recordKey] = [countNum + 1, firstTime]
-              consoleLog(`[ ${recordKey} ]-请求失败,重试请求${countNum + 1}:`, err, '#eb3941')
+              consoleLog(`[ ${recordKey} ]-请求失败,重试请求${countNum + 1}↓`, err, '#eb3941')
               appPro.resolved(config).then((res) => resolve(res))
             }
           }
@@ -337,20 +382,20 @@ export class UniRequest {
     return (promise as unknown) as Promise<T>
   }
 
-  get<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<T> {
-    return this.request(apiUrl, data, 'GET', options)
+  get<T = any>(apiUrl: string, inject?: Inject_DTYPE, options?: RequestConfig_DTYPE): Promise<T> {
+    return this.request([apiUrl, 'GET'], inject, options)
   }
 
-  post<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<T> {
-    return this.request(apiUrl, data, 'POST', options)
+  post<T = any>(apiUrl: string, inject?: Inject_DTYPE, options?: RequestConfig_DTYPE): Promise<T> {
+    return this.request([apiUrl, 'POST'], inject, options)
   }
 
-  put<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<T> {
-    return this.request(apiUrl, data, 'PUT', options)
+  put<T = any>(apiUrl: string, inject?: Inject_DTYPE, options?: RequestConfig_DTYPE): Promise<T> {
+    return this.request([apiUrl, 'PUT'], inject, options)
   }
 
-  delete<T = any>(apiUrl: string, data: any, options?: UniOptions_DTYPE): Promise<T> {
-    return this.request(apiUrl, data, 'DELETE', options)
+  delete<T = any>(apiUrl: string, inject?: Inject_DTYPE, options?: RequestConfig_DTYPE): Promise<T> {
+    return this.request([apiUrl, 'DELETE'], inject, options)
   }
 
   setObjectVal(obj: Object) {

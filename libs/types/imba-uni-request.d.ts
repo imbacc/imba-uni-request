@@ -1,5 +1,3 @@
-import type { InterceptorsImpl_DTYPE } from './imba-uni-interceptor'
-
 export type METHOD_DTYPE = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'OPTIONS' | 'CONNECT' | 'HEAD' | 'TRACE'
 
 export type Response_DTYPE<T = any> = {
@@ -12,12 +10,12 @@ export type Response_DTYPE<T = any> = {
 
 export type CacheEnv = 'development' | 'production' | 'dev' | 'prod'
 export type CacheUnit = 'mm' | 'ss'
-export type RequestConfig_DTYPE = Options_DTYPE & UniOptions_DTYPE
 
 export type Record_DTYPE = { [key: string]: any }
 export type Header_DTYPE = { [key: string]: string }
+export type Data_DTYPE = Record_DTYPE
 
-export type DataMore_DTYPE = {
+export type Inject_DTYPE = {
   /**
    * 去除token
    */
@@ -50,14 +48,31 @@ export type DataMore_DTYPE = {
    * 地址/page/:id
    */
   _id?: string
+  /**
+   * querystring参数
+   */
+  _param?: Data_DTYPE
+  /**
+   * 请求体参数
+   */
+  _body?: Data_DTYPE
 }
 
-export type Options_DTYPE = {
+export type RequestConfig_DTYPE = {
   /**
    *  `baseURL` 将自动加在 `url` 前面，除非 `url` 是一个绝对 URL。
    *  它可以通过设置一个 `baseURL` 便于为实例的方法传递相对 URL
    */
   baseURL: string
+  /**
+   * 资源url
+   */
+  url?: string
+  /**
+   * 默认为 GET
+   * 可以是：OPTIONS，GET，HEAD，POST，PUT，DELETE，TRACE，CONNECT
+   */
+  method?: METHOD_DTYPE
   /**
    * 超时时间，单位毫秒
    * 默认 30s = 1000 * 30
@@ -67,11 +82,20 @@ export type Options_DTYPE = {
    * 设置请求的 header，header 中不能设置 Referer。
    * 平台差异说明：App、H5端会自动带上cookie，且H5端不可手动修改
    */
+  header?: Header_DTYPE
   headers?: Header_DTYPE
+  /**
+   * querystring参数
+   */
+  param?: Data_DTYPE
+  /**
+   * 请求体参数
+   */
+  body?: Data_DTYPE
   /**
    * 自定义内容 格式函数
    */
-  data?: DataMore_DTYPE
+  inject?: Inject_DTYPE
   /**
    * 缓存&SWR环境 'development' | 'production' | 'dev' | 'prod'
    * 默认 dev
@@ -108,95 +132,20 @@ export type Options_DTYPE = {
    */
   retryInterval?: number
   /**
+   * uni.request原始配置
+   */
+  uniOption?: Partial<UniNamespace.RequestOptions>
+  /**
    * 分页字段设置
    */
   pageKey?: string
   sizeKey?: string
   /**
+   * 打印API接口地址是否MD5化
+   */
+  printMD5?: boolean
+  /**
    * 是否开启打印请求数据
    */
   printConsole?: boolean
-}
-
-type dataTYPE = Record_DTYPE
-export interface UniOptions_DTYPE {
-  /**
-   * 资源url
-   */
-  url: string
-  /**
-   * 请求的参数
-   */
-  data?: string | dataTYPE | ArrayBuffer
-  /**
-   * 不管GET请求还是POST PUT请求，请求地址都追加querystring形式参数
-   */
-  appendQuery?: boolean
-  /**
-   * 设置请求的 header，header 中不能设置 Referer。
-   */
-  header?: Header_DTYPE | any
-  /**
-   * 默认为 GET
-   * 可以是：OPTIONS，GET，HEAD，POST，PUT，DELETE，TRACE，CONNECT
-   */
-  method?: METHOD_DTYPE
-  /**
-   * 超时时间
-   */
-  timeout?: number
-  /**
-   * 如果设为json，会尝试对返回的数据做一次 JSON.parse
-   */
-  dataType?: string
-  /**
-   * 验证 ssl 证书
-   */
-  sslVerify?: boolean
-  /**
-   * 跨域请求时是否携带凭证
-   */
-  withCredentials?: boolean
-  /**
-   * DNS解析时优先使用 ipv4
-   */
-  firstIpv4?: boolean
-  /**
-   * 成功返回的回调函数
-   */
-  success?: (result: RequestSuccessCallbackResult) => void
-  /**
-   * 失败的回调函数
-   */
-  fail?: (result: GeneralCallbackResult) => void
-  /**
-   * 结束的回调函数（调用成功、失败都会执行）
-   */
-  complete?: (result: GeneralCallbackResult) => void
-}
-
-interface RequestSuccessCallbackResult {
-  /**
-   * 开发者服务器返回的数据
-   */
-  data: string | { [key: string]: any } | ArrayBuffer
-  /**
-   * 开发者服务器返回的 HTTP 状态码
-   */
-  statusCode: number
-  /**
-   * 开发者服务器返回的 HTTP Response Header
-   */
-  header: Header_DTYPE
-  /**
-   * 开发者服务器返回的 cookies，格式为字符串数组
-   */
-  cookies: string[]
-}
-
-interface GeneralCallbackResult {
-  /**
-   * 错误信息
-   */
-  errMsg: string
 }
